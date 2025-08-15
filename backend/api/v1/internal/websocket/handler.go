@@ -1,17 +1,14 @@
 package websocket
 
 import (
-	"fmt"
+	"crypto/rand"
+	"encoding/json"
 	"log"
 	"net/http"
+	"pong-api-v1/internal/game"
 
 	"github.com/gorilla/websocket"
 )
-
-type PlayerInput struct {
-	Type string  `json:"type"`
-	Y    float64 `json:"y"`
-}
 
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
@@ -29,23 +26,21 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		fmt.Println(string(p))
-
-		if err := conn.WriteMessage(messageType, p); err != nil {
-			log.Println(err)
-			return
-		}
+	playerId := rand.Text()
+	newPlayer := &game.Player{
+		Conn:  conn,
+		Id:    playerId,
+		Name:  "name",
+		X:     0.5,
+		Score: 0,
 	}
+	newGame := game.InitGame()
+	newGame.AddPlayer(newPlayer) // Should be player id
+
+	handlePlayer(conn, newGame, playerId)
 }
 
-func handlePlayer(conn *websocket.Conn) {
+func handlePlayer(conn *websocket.Conn, newGame *game.Game, playerId string) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -53,11 +48,15 @@ func handlePlayer(conn *websocket.Conn) {
 			return
 		}
 
-		var input PlayerInput
+		var input game.PlayerInput
+		if err := json.Unmarshal(msg, &input); err != nil {
+			log.Printf("JSON unmarshall error:%v", err)
+			continue
+		}
 
 		switch input.Type {
 		case "racket_move":
-			// Uddate paddle
+			newGame.Players[playerId].X = input.X
 		}
 	}
 }
