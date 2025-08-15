@@ -20,7 +20,7 @@ type StorageConfig struct {
 	Path string
 }
 
-func LoadConfig() *Config {
+func Load() *Config {
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Error while loading .env file")
