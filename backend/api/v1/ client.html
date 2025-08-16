@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Vertical Pong WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 20px;
+            padding: 0;
+        }
+
+        #game-container {
+            display: inline-block;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        #game {
+            width: 400px;
+            height: 600px;
+            border: 2px solid #333;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .paddle {
+            width: 15%;
+            height: 2%;
+            background: #fff;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+        }
+
+        #paddle1 {
+            top: 3%;
+        }
+
+        #paddle2 {
+            top: 97%;
+        }
+
+        #ball {
+            width: 2%;
+            height: 2%;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+        }
+
+        #status-container {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 2;
+        }
+
+        #status {
+            color: #fff;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        #controls {
+            margin: 15px auto;
+            width: 400px;
+        }
+
+        #messages {
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            width: 400px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background: #f9f9f9;
+        }
+
+        button {
+            padding: 8px 15px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Vertical Pong (X-axis movement)</h1>
+    <div id="game-container">
+        <div id="game">
+            <div id="status-container">
+                <div id="status">Disconnected</div>
+            </div>
+            <div id="paddle1" class="paddle"></div>
+            <div id="paddle2" class="paddle"></div>
+            <div id="ball"></div>
+        </div>
+    </div>
+    <div id="controls">
+        <button id="connectBtn">Connect</button>
+        <button id="moveBtn">Send Random Move</button>
+    </div>
+    <div id="messages"></div>
+
+    <script>
+        // [Остальной JavaScript код остается без изменений]
+        // Элементы DOM
+        const connectBtn = document.getElementById('connectBtn');
+        const moveBtn = document.getElementById('moveBtn');
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        const paddle1 = document.getElementById('paddle1');
+        const paddle2 = document.getElementById('paddle2');
+        const ball = document.getElementById('ball');
+        const game = document.getElementById('game');
+
+        // Состояние
+        let socket = null;
+        let isConnected = false;
+        let playerNumber = null; // 1 или 2
+
+        // Позиции элементов (нормализованные 0-1)
+        const elements = {
+            paddle1: { x: 0.5, y: 0.03 },  // Верхняя ракетка
+            paddle2: { x: 0.5, y: 0.97 },  // Нижняя ракетка
+            ball: { x: 0.5, y: 0.5 }    // Центр
+        };
+
+        // Обновление позиций на экране
+        function updatePositions() {
+            paddle1.style.left = `${elements.paddle1.x * 100}%`;
+            paddle1.style.top = `${elements.paddle1.y * 100}%`;
+
+            paddle2.style.left = `${elements.paddle2.x * 100}%`;
+            paddle2.style.top = `${elements.paddle2.y * 100}%`;
+
+            ball.style.left = `${elements.ball.x * 100}%`;
+            ball.style.top = `${elements.ball.y * 100}%`;
+        }
+
+        // Инициализация
+        updatePositions();
+
+        // Подключение к WebSocket
+        connectBtn.addEventListener('click', () => {
+            if (isConnected) {
+                socket.close();
+                return;
+            }
+
+            socket = new WebSocket('ws://localhost:8080/ws');
+
+            socket.onopen = () => {
+                isConnected = true;
+                statusDiv.textContent = "Connected";
+                connectBtn.textContent = "Disconnect";
+                logMessage("Connected to server");
+            };
+
+            socket.onclose = () => {
+                isConnected = false;
+                statusDiv.textContent = "Disconnected";
+                connectBtn.textContent = "Connect";
+                logMessage("Disconnected from server");
+            };
+
+            socket.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    logMessage(`Received: ${JSON.stringify(data)}`);
+
+                    // Обновление позиций ракеток по X
+                    if (data.players) {
+                        if (data.players[0]) {
+                            elements.paddle1.x = data.players[0].x;
+                        }
+                        if (data.players[1]) {
+                            elements.paddle2.x = data.players[1].x;
+                        }
+                    }
+
+                    // Обновление позиции мяча
+                    if (data.ball) {
+                        elements.ball.x = data.ball.x;
+                        elements.ball.y = data.ball.y;
+                    }
+
+                    updatePositions();
+                } catch (err) {
+                    logMessage(`Error parsing message: ${err}`);
+                }
+            };
+
+            socket.onerror = (e) => {
+                logMessage(`WebSocket error: ${e.message}`);
+            };
+        });
+
+        // Отправка тестового движения (по X)
+        moveBtn.addEventListener('click', () => {
+            if (!isConnected) {
+                logMessage("Not connected!");
+                return;
+            }
+
+            const moveMsg = {
+                type: "racket_move",
+                x: Math.random() // Случайная позиция по X (0-1)
+            };
+
+            socket.send(JSON.stringify(moveMsg));
+            logMessage(`Sent: ${JSON.stringify(moveMsg)}`);
+        });
+
+        // Управление ракеткой мышью (движение по X)
+        game.addEventListener('mousemove', (e) => {
+            if (!isConnected) return;
+
+            const rect = game.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width; // Нормализованная X [0, 1]
+
+            // Ограничиваем диапазон (чтобы ракетка не выходила за границы)
+            const clampedX = Math.max(0.075, Math.min(0.925, x));
+
+            const moveMsg = {
+                type: "racket_move",
+                x: clampedX
+            };
+
+            socket.send(JSON.stringify(moveMsg));
+        });
+
+        // Логирование
+        function logMessage(msg) {
+            const p = document.createElement('p');
+            p.textContent = msg;
+            messagesDiv.appendChild(p);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+
+</html>

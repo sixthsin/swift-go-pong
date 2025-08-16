@@ -1,13 +1,19 @@
 package websocket
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"log"
 	"net/http"
 	"pong-api-v1/internal/game"
+	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+)
+
+var (
+	currentGame     *game.Game
+	gameInitializer sync.Once
 )
 
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -20,29 +26,46 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	gameInitializer.Do(func() {
+		currentGame = game.InitGame()
+	})
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 	}
-	defer conn.Close()
+	// defer conn.Close()
 
-	playerId := rand.Text()
+	playerId := uuid.New().String()
 	newPlayer := &game.Player{
 		Conn:  conn,
 		Id:    playerId,
-		Name:  "name",
-		X:     0.5,
-		Score: 0,
+		X:     game.PlayerDefaultX,
+		Score: game.PlayerStartScore,
 	}
-	newGame := game.InitGame()
-	newGame.AddPlayer(newPlayer) // Should be player id
 
-	handlePlayer(conn, newGame, playerId)
+	if err := currentGame.AddPlayer(newPlayer); err != nil {
+		conn.WriteMessage(websocket.CloseMessage, []byte(err.Error()))
+		conn.Close()
+		return
+	}
+
+	for {
+		if len(currentGame.Players) != 2 {
+			continue
+		} else {
+			break
+		}
+	}
+
+	go currentGame.Run()
+	go handlePlayer(conn, currentGame, playerId)
 }
 
-func handlePlayer(conn *websocket.Conn, newGame *game.Game, playerId string) {
+func handlePlayer(conn *websocket.Conn, currentGame *game.Game, playerId string) {
 	for {
 		_, msg, err := conn.ReadMessage()
+		log.Printf("Recieved request:%s", string(msg))
 		if err != nil {
 			log.Println(err)
 			return
@@ -56,7 +79,13 @@ func handlePlayer(conn *websocket.Conn, newGame *game.Game, playerId string) {
 
 		switch input.Type {
 		case "racket_move":
-			newGame.Players[playerId].X = input.X
+			if input.X < 0 || input.X > 1 {
+				conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"Invalid position"}`))
+				continue
+			}
+			currentGame.Mu.Lock()
+			currentGame.Players[playerId].X = input.X
+			currentGame.Mu.Unlock()
 		}
 	}
 }

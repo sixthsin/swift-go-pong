@@ -9,7 +9,6 @@ import (
 type Player struct {
 	Conn  *websocket.Conn
 	Id    string  `json:"id"`
-	Name  string  `json:"name"`
 	X     float64 `json:"x"`
 	Score int     `json:"score"`
 }
@@ -26,7 +25,7 @@ type Game struct {
 	Players map[string]*Player `json:"players"`
 	Ball    Ball               `json:"ball"`
 	Started bool               `json:"started"`
-	mu      *sync.Mutex
+	Mu      *sync.Mutex
 }
 
 type PlayerInput struct {
