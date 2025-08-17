@@ -14,6 +14,7 @@ import (
 var (
 	currentGame     *game.Game
 	gameInitializer sync.Once
+	gameMutex       sync.Mutex
 )
 
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -26,15 +27,17 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	gameMutex.Lock()
 	gameInitializer.Do(func() {
 		currentGame = game.InitGame()
 	})
+	gameMutex.Unlock()
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
+		return
 	}
-	// defer conn.Close()
 
 	playerId := uuid.New().String()
 	newPlayer := &game.Player{
@@ -50,13 +53,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for {
-		if len(currentGame.Players) != 2 {
-			continue
-		} else {
-			break
-		}
-	}
+	currentGame.WaitForPlayers()
 
 	go currentGame.Run()
 	go handlePlayer(conn, currentGame, playerId)
@@ -64,10 +61,22 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func handlePlayer(conn *websocket.Conn, currentGame *game.Game, playerId string) {
 	for {
-		_, msg, err := conn.ReadMessage()
+		messageType, msg, err := conn.ReadMessage()
 		log.Printf("Recieved request:%s", string(msg))
 		if err != nil {
-			log.Println(err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Unexpected close: %v", err)
+			} else {
+				log.Printf("Connection closed: %v", err)
+			}
+			currentGame.Players[playerId].Conn.Close()
+			delete(currentGame.Players, playerId)
+			return
+		}
+
+		switch messageType {
+		case websocket.CloseMessage:
+			log.Println("Received close frame")
 			return
 		}
 
@@ -76,6 +85,8 @@ func handlePlayer(conn *websocket.Conn, currentGame *game.Game, playerId string)
 			log.Printf("JSON unmarshall error:%v", err)
 			continue
 		}
+
+		log.Println(input.X)
 
 		switch input.Type {
 		case "racket_move":

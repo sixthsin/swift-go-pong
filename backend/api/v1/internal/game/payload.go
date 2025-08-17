@@ -25,7 +25,7 @@ type Game struct {
 	Players map[string]*Player `json:"players"`
 	Ball    Ball               `json:"ball"`
 	Started bool               `json:"started"`
-	Mu      *sync.Mutex
+	Mu      *sync.Mutex        `json:"-"`
 }
 
 type PlayerInput struct {

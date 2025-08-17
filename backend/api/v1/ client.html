@@ -2,24 +2,26 @@
 <html>
 
 <head>
-    <title>Vertical Pong WebSocket Test</title>
+    <title>Pong - Dual Bottom Paddles</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            margin-top: 20px;
-            padding: 0;
+            margin: 0;
+            padding: 20px 0;
+            background: #f0f0f0;
         }
 
         #game-container {
             display: inline-block;
             position: relative;
             margin: 0 auto;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
         }
 
         #game {
-            width: 400px;
-            height: 600px;
+            width: 500px;
+            height: 700px;
             border: 2px solid #333;
             background: #000;
             position: relative;
@@ -27,25 +29,30 @@
         }
 
         .paddle {
-            width: 15%;
+            width: 20%;
             height: 2%;
             background: #fff;
             position: absolute;
-            transform: translate(-50%, -50%);
-            z-index: 1;
+            transform: translateX(-50%);
+            border-radius: 4px;
+            transition: left 0.1s ease-out;
         }
 
-        #paddle1 {
-            top: 3%;
+        #your-paddle {
+            bottom: 20px;
+            left: 50%;
+            background: #4CAF50;
         }
 
-        #paddle2 {
-            top: 97%;
+        #opponent-paddle {
+            top: 20px;
+            left: 50%;
+            background: #F44336;
         }
 
         #ball {
-            width: 2%;
-            height: 2%;
+            width: 15px;
+            height: 15px;
             background: #fff;
             border-radius: 50%;
             position: absolute;
@@ -64,94 +71,128 @@
 
         #status {
             color: #fff;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px;
-            border-radius: 5px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px 15px;
+            border-radius: 20px;
             display: inline-block;
+            font-size: 14px;
         }
 
         #controls {
-            margin: 15px auto;
-            width: 400px;
+            margin: 20px auto;
+            width: 500px;
         }
 
         #messages {
             max-height: 200px;
             overflow-y: auto;
             text-align: left;
-            width: 400px;
-            margin: 0 auto;
-            border: 1px solid #ccc;
+            width: 500px;
+            margin: 10px auto;
+            border: 1px solid #ddd;
             padding: 10px;
-            background: #f9f9f9;
+            background: #fff;
+            border-radius: 5px;
+            font-size: 13px;
         }
 
         button {
-            padding: 8px 15px;
-            margin: 0 5px;
+            padding: 10px 20px;
+            margin: 0 10px;
             cursor: pointer;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #0b7dda;
+        }
+
+        #score {
+            color: white;
+            font-size: 24px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+        }
+
+        #player-label {
+            color: white;
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 10px;
+            border-radius: 10px;
         }
     </style>
 </head>
 
 <body>
-    <h1>Vertical Pong (X-axis movement)</h1>
+    <h1>Pong - Your Paddle at Bottom</h1>
     <div id="game-container">
         <div id="game">
             <div id="status-container">
                 <div id="status">Disconnected</div>
             </div>
-            <div id="paddle1" class="paddle"></div>
-            <div id="paddle2" class="paddle"></div>
+            <div id="score">0 : 0</div>
+            <div id="player-label">Your paddle</div>
+            <div id="opponent-paddle" class="paddle"></div>
+            <div id="your-paddle" class="paddle"></div>
             <div id="ball"></div>
         </div>
     </div>
     <div id="controls">
         <button id="connectBtn">Connect</button>
-        <button id="moveBtn">Send Random Move</button>
+        <button id="moveBtn">Send Test Move</button>
     </div>
     <div id="messages"></div>
 
     <script>
-        // [Остальной JavaScript код остается без изменений]
-        // Элементы DOM
+        // DOM Elements
         const connectBtn = document.getElementById('connectBtn');
         const moveBtn = document.getElementById('moveBtn');
         const statusDiv = document.getElementById('status');
         const messagesDiv = document.getElementById('messages');
-        const paddle1 = document.getElementById('paddle1');
-        const paddle2 = document.getElementById('paddle2');
+        const yourPaddle = document.getElementById('your-paddle');
+        const opponentPaddle = document.getElementById('opponent-paddle');
         const ball = document.getElementById('ball');
         const game = document.getElementById('game');
+        const scoreDiv = document.getElementById('score');
+        const playerLabel = document.getElementById('player-label');
 
-        // Состояние
+        // Game state
         let socket = null;
         let isConnected = false;
-        let playerNumber = null; // 1 или 2
+        let playerId = null;
 
-        // Позиции элементов (нормализованные 0-1)
+        // Positions (normalized 0-1)
         const elements = {
-            paddle1: { x: 0.5, y: 0.03 },  // Верхняя ракетка
-            paddle2: { x: 0.5, y: 0.97 },  // Нижняя ракетка
-            ball: { x: 0.5, y: 0.5 }    // Центр
+            yourPaddle: { x: 0.5 },
+            opponentPaddle: { x: 0.5 },
+            ball: { x: 0.5, y: 0.5 }
         };
 
-        // Обновление позиций на экране
+        // Update screen positions
         function updatePositions() {
-            paddle1.style.left = `${elements.paddle1.x * 100}%`;
-            paddle1.style.top = `${elements.paddle1.y * 100}%`;
-
-            paddle2.style.left = `${elements.paddle2.x * 100}%`;
-            paddle2.style.top = `${elements.paddle2.y * 100}%`;
-
+            yourPaddle.style.left = `${elements.yourPaddle.x * 100}%`;
+            opponentPaddle.style.left = `${elements.opponentPaddle.x * 100}%`;
             ball.style.left = `${elements.ball.x * 100}%`;
             ball.style.top = `${elements.ball.y * 100}%`;
         }
 
-        // Инициализация
+        // Initialize positions
         updatePositions();
 
-        // Подключение к WebSocket
+        // WebSocket connection
         connectBtn.addEventListener('click', () => {
             if (isConnected) {
                 socket.close();
@@ -162,7 +203,7 @@
 
             socket.onopen = () => {
                 isConnected = true;
-                statusDiv.textContent = "Connected";
+                statusDiv.textContent = "Connected (Waiting for opponent)";
                 connectBtn.textContent = "Disconnect";
                 logMessage("Connected to server");
             };
@@ -172,27 +213,48 @@
                 statusDiv.textContent = "Disconnected";
                 connectBtn.textContent = "Connect";
                 logMessage("Disconnected from server");
+                playerId = null; // Reset on disconnect
             };
 
             socket.onmessage = (e) => {
                 try {
                     const data = JSON.parse(e.data);
-                    logMessage(`Received: ${JSON.stringify(data)}`);
+                    // logMessage(`Received: ${JSON.stringify(data)}`);
 
-                    // Обновление позиций ракеток по X
+                    // Update game state
                     if (data.players) {
-                        if (data.players[0]) {
-                            elements.paddle1.x = data.players[0].x;
+                        const playerIds = Object.keys(data.players);
+
+                        // Assign our playerId on first connect (any player)
+                        if (playerId === null && playerIds.length > 0) {
+                            playerId = playerIds[0]; // First player we see becomes "us"
+                            statusDiv.textContent = "Connected";
+                            playerLabel.textContent = "Your paddle";
                         }
-                        if (data.players[1]) {
-                            elements.paddle2.x = data.players[1].x;
+
+                        // Always: your paddle is at the bottom (green)
+                        if (playerId && data.players[playerId] !== undefined) {
+                            elements.yourPaddle.x = data.players[playerId].x;
+                        }
+
+                        // Opponent is any other player (shown at top, red)
+                        const opponentId = playerIds.find(id => id !== playerId);
+                        if (opponentId) {
+                            elements.opponentPaddle.x = data.players[opponentId].x;
+                        } else {
+                            elements.opponentPaddle.x = 0.5; // center if no opponent
                         }
                     }
 
-                    // Обновление позиции мяча
+                    // Update ball position
                     if (data.ball) {
                         elements.ball.x = data.ball.x;
                         elements.ball.y = data.ball.y;
+                    }
+
+                    // Update score: assume scores[0] = top (opponent), scores[1] = bottom (you)
+                    if (data.scores && Array.isArray(data.scores) && data.scores.length >= 2) {
+                        scoreDiv.textContent = `${data.scores[0]} : ${data.scores[1]}`;
                     }
 
                     updatePositions();
@@ -206,41 +268,53 @@
             };
         });
 
-        // Отправка тестового движения (по X)
+        // Send paddle movement
+        function sendPaddleMove(x) {
+            if (!isConnected || playerId === null) return;
+
+            const moveMsg = {
+                type: "racket_move",
+                x: x
+            };
+
+            socket.send(JSON.stringify(moveMsg));
+            // logMessage(`Sent: ${JSON.stringify(moveMsg)}`);
+        }
+
+        // Test movement button
         moveBtn.addEventListener('click', () => {
             if (!isConnected) {
                 logMessage("Not connected!");
                 return;
             }
-
-            const moveMsg = {
-                type: "racket_move",
-                x: Math.random() // Случайная позиция по X (0-1)
-            };
-
-            socket.send(JSON.stringify(moveMsg));
-            logMessage(`Sent: ${JSON.stringify(moveMsg)}`);
+            sendPaddleMove(Math.random());
         });
 
-        // Управление ракеткой мышью (движение по X)
+        // Mouse movement handler
         game.addEventListener('mousemove', (e) => {
             if (!isConnected) return;
 
             const rect = game.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width; // Нормализованная X [0, 1]
+            const x = (e.clientX - rect.left) / rect.width;
+            const clampedX = Math.max(0.1, Math.min(0.9, x));
 
-            // Ограничиваем диапазон (чтобы ракетка не выходила за границы)
-            const clampedX = Math.max(0.075, Math.min(0.925, x));
-
-            const moveMsg = {
-                type: "racket_move",
-                x: clampedX
-            };
-
-            socket.send(JSON.stringify(moveMsg));
+            sendPaddleMove(clampedX);
         });
 
-        // Логирование
+        // Touch support for mobile
+        game.addEventListener('touchmove', (e) => {
+            if (!isConnected) return;
+            e.preventDefault();
+
+            const rect = game.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) / rect.width;
+            const clampedX = Math.max(0.1, Math.min(0.9, x));
+
+            sendPaddleMove(clampedX);
+        });
+
+        // Log messages to UI
         function logMessage(msg) {
             const p = document.createElement('p');
             p.textContent = msg;

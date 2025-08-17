@@ -11,14 +11,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var (
-	PlayerStartScore    = 0
-	PlayerDefaultX      = 0.5
-	ballDefaultX        = 0.5
-	ballDefaultY        = 0.5
-	ballDefaultDX       = 0.004
-	ballDefaultDY       = 0.002
+const (
 	gameMaxPlayersCount = 2
+	ticksPerSecond      = 60
+)
+
+var (
+	PlayerStartScore = 0
+	PlayerDefaultX   = 0.5
+	ballDefaultX     = 0.5
+	ballDefaultY     = 0.5
+	ballDefaultDX    = 0.004
+	ballDefaultDY    = 0.002
 )
 
 func InitGame() *Game {
@@ -39,11 +43,12 @@ func InitGame() *Game {
 func (g *Game) AddPlayer(p *Player) error {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
-	if len(g.Players) <= gameMaxPlayersCount {
+
+	if len(g.Players)+1 <= gameMaxPlayersCount {
 		g.Players[p.Id] = p
 		return nil
 	}
-	p.Conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"Game is full"}`))
+
 	return errors.New("Game is full")
 }
 
@@ -52,7 +57,7 @@ func generateGameId() string {
 }
 
 func (g *Game) Run() {
-	ticker := time.NewTicker(16 * time.Millisecond)
+	ticker := time.NewTicker(time.Second / ticksPerSecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -84,6 +89,15 @@ func (g *Game) BroadcastGameState() {
 	for _, player := range g.Players {
 		if err := player.Conn.WriteMessage(websocket.TextMessage, state); err != nil {
 			log.Printf("JSON error: %v", err.Error())
+		}
+	}
+}
+
+func (g *Game) WaitForPlayers() {
+	log.Printf("Players connected: %d", len(g.Players))
+	for {
+		if len(g.Players) == 2 {
+			break
 		}
 	}
 }
