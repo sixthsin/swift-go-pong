@@ -2,7 +2,7 @@
 //  AppDelegate.swift
 //  swift-go-pong
 //
-//  Created by Вадим Тимченко on 8/13/25.
+//  Created by Вадим Тимченко on 8/17/25.
 //
 
 import UIKit
