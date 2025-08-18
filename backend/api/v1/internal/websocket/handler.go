@@ -7,7 +7,6 @@ import (
 	"pong-api-v1/internal/game"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -39,7 +38,13 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playerId := uuid.New().String()
+	var playerId string
+	if len(currentGame.Players) == 0 {
+		playerId = "player1"
+	} else {
+		playerId = "player2"
+	}
+
 	newPlayer := &game.Player{
 		Conn:  conn,
 		Id:    playerId,
@@ -65,8 +70,6 @@ func handlePlayer(conn *websocket.Conn, currentGame *game.Game, playerId string)
 		log.Printf("Recieved request:%s", string(msg))
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Unexpected close: %v", err)
-			} else {
 				log.Printf("Connection closed: %v", err)
 			}
 			currentGame.Players[playerId].Conn.Close()
@@ -76,7 +79,8 @@ func handlePlayer(conn *websocket.Conn, currentGame *game.Game, playerId string)
 
 		switch messageType {
 		case websocket.CloseMessage:
-			log.Println("Received close frame")
+			currentGame.Players[playerId].Conn.Close()
+			delete(currentGame.Players, playerId)
 			return
 		}
 

@@ -14,6 +14,10 @@ import (
 const (
 	gameMaxPlayersCount = 2
 	ticksPerSecond      = 60
+	topRacketY          = 0.05
+	bottomRacketY       = 0.95
+	racketWidth         = 0.2
+	racketHeight        = 0.02
 )
 
 var (
@@ -35,8 +39,10 @@ func InitGame() *Game {
 			DX: ballDefaultDX,
 			DY: ballDefaultDY,
 		},
-		Started: false,
-		Mu:      &sync.Mutex{},
+		Started:       false,
+		Mu:            &sync.Mutex{},
+		TopRacketY:    topRacketY,
+		BottomRacketY: bottomRacketY,
 	}
 }
 
@@ -61,6 +67,7 @@ func (g *Game) Run() {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		g.CheckPaddleCollision()
 		g.Update()
 		g.BroadcastGameState()
 	}
@@ -99,5 +106,22 @@ func (g *Game) WaitForPlayers() {
 		if len(g.Players) == 2 {
 			break
 		}
+	}
+}
+
+func (g *Game) HandlePaddleHit(racketX float64) {
+	g.Ball.DY *= -1
+}
+
+func (g *Game) CheckPaddleCollision() {
+	if g.Ball.Y >= g.BottomRacketY-racketHeight &&
+		((g.Ball.X >= g.Players["player1"].X-(racketWidth/2)) ||
+			(g.Ball.X <= g.Players["player1"].X+(racketWidth/2))) {
+		g.HandlePaddleHit(g.Players["player1"].X)
+	}
+	if g.Ball.Y <= g.TopRacketY+racketHeight &&
+		((g.Ball.X >= g.Players["player2"].X-(racketWidth/2)) ||
+			(g.Ball.X <= g.Players["player2"].X+(racketWidth/2))) {
+		g.HandlePaddleHit(g.Players["player2"].X)
 	}
 }

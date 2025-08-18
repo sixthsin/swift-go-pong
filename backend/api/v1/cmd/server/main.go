@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-	// config := cfg.Load()
 
 	http.HandleFunc("/ws", websocket.HandleWebSocket)
 	log.Println("Started server on http://localhost:8080")

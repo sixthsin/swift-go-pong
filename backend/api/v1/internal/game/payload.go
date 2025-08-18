@@ -10,6 +10,7 @@ type Player struct {
 	Conn  *websocket.Conn
 	Id    string  `json:"id"`
 	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
 	Score int     `json:"score"`
 }
 
@@ -21,11 +22,13 @@ type Ball struct {
 }
 
 type Game struct {
-	Id      string             `json:"id"`
-	Players map[string]*Player `json:"players"`
-	Ball    Ball               `json:"ball"`
-	Started bool               `json:"started"`
-	Mu      *sync.Mutex        `json:"-"`
+	Id            string             `json:"id"`
+	Players       map[string]*Player `json:"players"`
+	Ball          Ball               `json:"ball"`
+	Started       bool               `json:"started"`
+	Mu            *sync.Mutex        `json:"-"`
+	TopRacketY    float64            `json:"-"`
+	BottomRacketY float64            `json:"-"`
 }
 
 type PlayerInput struct {
