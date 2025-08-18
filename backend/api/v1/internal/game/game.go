@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -17,7 +16,7 @@ const (
 	topRacketY          = 0.05
 	bottomRacketY       = 0.95
 	racketWidth         = 0.2
-	racketHeight        = 0.02
+	racketHeight        = 0.01
 )
 
 var (
@@ -29,9 +28,9 @@ var (
 	ballDefaultDY    = 0.002
 )
 
-func InitGame() *Game {
+func InitGame(gameId string) *Game {
 	return &Game{
-		Id:      generateGameId(),
+		Id:      gameId,
 		Players: make(map[string]*Player),
 		Ball: Ball{
 			X:  ballDefaultX,
@@ -58,18 +57,16 @@ func (g *Game) AddPlayer(p *Player) error {
 	return errors.New("Game is full")
 }
 
-func generateGameId() string {
-	return uuid.New().String()
-}
-
 func (g *Game) Run() {
 	ticker := time.NewTicker(time.Second / ticksPerSecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		g.CheckPaddleCollision()
-		g.Update()
-		g.BroadcastGameState()
+		if len(g.Players) == 2 {
+			g.CheckPaddleCollision()
+			g.Update()
+			g.BroadcastGameState()
+		}
 	}
 }
 
@@ -115,13 +112,15 @@ func (g *Game) HandlePaddleHit(racketX float64) {
 
 func (g *Game) CheckPaddleCollision() {
 	if g.Ball.Y >= g.BottomRacketY-racketHeight &&
-		((g.Ball.X >= g.Players["player1"].X-(racketWidth/2)) ||
-			(g.Ball.X <= g.Players["player1"].X+(racketWidth/2))) {
+		g.Ball.Y <= g.BottomRacketY &&
+		g.Ball.X >= g.Players["player1"].X-(racketWidth/2) &&
+		g.Ball.X <= g.Players["player1"].X+(racketWidth/2) {
 		g.HandlePaddleHit(g.Players["player1"].X)
 	}
 	if g.Ball.Y <= g.TopRacketY+racketHeight &&
-		((g.Ball.X >= g.Players["player2"].X-(racketWidth/2)) ||
-			(g.Ball.X <= g.Players["player2"].X+(racketWidth/2))) {
+		g.Ball.Y >= g.TopRacketY &&
+		g.Ball.X >= g.Players["player2"].X-(racketWidth/2) &&
+		g.Ball.X <= g.Players["player2"].X+(racketWidth/2) {
 		g.HandlePaddleHit(g.Players["player2"].X)
 	}
 }
